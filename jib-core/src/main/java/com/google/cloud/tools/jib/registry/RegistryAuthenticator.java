@@ -77,16 +77,22 @@ public class RegistryAuthenticator {
     public RegistryAuthenticator initialize()
         throws RegistryAuthenticationFailedException, IOException, RegistryException {
       try {
-        return RegistryClient.factory(serverUrl, repository)
+        RegistryAuthenticator authenticator = RegistryClient.factory(serverUrl, repository)
             .setAllowInsecureRegistries(allowInsecureRegistries)
             .newRegistryClient()
             .getRegistryAuthenticator();
+        authenticator.setAllowInsecureRegistries(false);
+        return authenticator;
 
       } catch (MalformedURLException ex) {
         throw new RegistryAuthenticationFailedException(ex);
 
       } catch (InsecureRegistryException ex) {
+<<<<<<< Updated upstream
         // Cannot skip certificate validation or use HTTP, so just return null.
+=======
+        // HTTP or skipping certificate validation is not allowed, so just return null.
+>>>>>>> Stashed changes
         return null;
       }
     }
@@ -184,6 +190,7 @@ public class RegistryAuthenticator {
 
   private final String authenticationUrlBase;
   @Nullable private Authorization authorization;
+  private boolean allowInsecureRegistries;
 
   RegistryAuthenticator(String realm, String service, String repository) {
     authenticationUrlBase = realm + "?service=" + service + "&scope=repository:" + repository + ":";
@@ -197,6 +204,11 @@ public class RegistryAuthenticator {
    */
   public RegistryAuthenticator setAuthorization(@Nullable Authorization authorization) {
     this.authorization = authorization;
+    return this;
+  }
+
+  public RegistryAuthenticator setAllowInsecureRegistries(boolean allowInsecureRegistries) {
+    this.allowInsecureRegistries = allowInsecureRegistries;
     return this;
   }
 

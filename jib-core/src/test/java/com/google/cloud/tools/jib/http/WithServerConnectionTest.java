@@ -28,7 +28,7 @@ public class WithServerConnectionTest {
   @Test
   public void testGet() throws IOException, InterruptedException {
     try (TestWebServer server = new TestWebServer();
-        Connection connection = new Connection(new URL(server.getEndpoint()))) {
+        Connection connection = new Connection.Builder(new URL(server.getEndpoint())).build()) {
       Response response = connection.send("GET", new Request.Builder().build());
 
       Assert.assertEquals(200, response.getStatusCode());
@@ -42,7 +42,7 @@ public class WithServerConnectionTest {
   @Test
   public void testErrorOnSecondSend() throws IOException, InterruptedException {
     try (TestWebServer server = new TestWebServer();
-        Connection connection = new Connection(new URL(server.getEndpoint()))) {
+        Connection connection = new Connection.Builder(new URL(server.getEndpoint())).build()) {
       connection.send("GET", new Request.Builder().build());
       try {
         connection.send("GET", new Request.Builder().build());

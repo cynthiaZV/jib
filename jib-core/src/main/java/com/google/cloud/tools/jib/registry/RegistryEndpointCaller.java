@@ -16,7 +16,6 @@
 
 package com.google.cloud.tools.jib.registry;
 
-import com.google.api.client.http.GenericUrl;
 import com.google.api.client.http.HttpResponseException;
 import com.google.api.client.http.HttpStatusCodes;
 import com.google.cloud.tools.jib.http.Authorization;
@@ -30,7 +29,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import org.apache.http.NoHttpResponseException;
@@ -52,7 +51,7 @@ class RegistryEndpointCaller<T> {
   private static final String DEFAULT_PROTOCOL = "https";
 
   /** Makes a {@link Connection} to the specified {@link URL}. */
-  private final BiFunction<URL, Boolean, Connection> connectionFactory;
+  private final Function<URL, Connection> connectionFactory;
 
   private final URL initialRequestUrl;
   private final String userAgent;
@@ -87,7 +86,7 @@ class RegistryEndpointCaller<T> {
         authorization,
         registryEndpointRequestProperties,
         allowInsecureRegistries,
-        Connection::new);
+        url -> new Connection.Builder(url).build());
   }
 
   @VisibleForTesting
@@ -98,7 +97,7 @@ class RegistryEndpointCaller<T> {
       @Nullable Authorization authorization,
       RegistryEndpointRequestProperties registryEndpointRequestProperties,
       boolean allowInsecureRegistries,
-      BiFunction<URL, Boolean, Connection> connectionFactory)
+      Function<URL, Connection> connectionFactory)
       throws MalformedURLException {
     this.initialRequestUrl =
         registryEndpointProvider.getApiRoute(DEFAULT_PROTOCOL + "://" + apiRouteBase);
@@ -119,7 +118,7 @@ class RegistryEndpointCaller<T> {
    */
   @Nullable
   T call() throws IOException, RegistryException {
-    return call(initialRequestUrl);
+    return call(initialRequestUrl, connectionFactory);
   }
 
   /**
@@ -132,13 +131,40 @@ class RegistryEndpointCaller<T> {
    */
   @VisibleForTesting
   @Nullable
+<<<<<<< Updated upstream
   T call(URL url) throws IOException, RegistryException {
     boolean isHttpProtocol = "http".equals(url.getProtocol());
+=======
+  T call(RequestState requestState) throws IOException, RegistryException {
+    try {
+      return _call(requestState, connectionFactory);
+    } catch (SSLPeerUnverifiedException unverifiedException) {
+      if (!allowInsecureRegistries) {
+        throw new InsecureRegistryException(requestState.url);
+      }
+
+      try {
+        return _call(requestState, connectionFactory);
+      } catch (HttpHostConnectException connectException) {
+        return _call(requestState, connectionFactory);
+      }
+    }
+  }
+
+  private T _call(RequestState requestState, Function<URL, Connection> connectionFactory)
+      throws IOException, RegistryException {
+    boolean isHttpProtocol = "http".equals(requestState.url.getProtocol());
+>>>>>>> Stashed changes
     if (!allowInsecureRegistries && isHttpProtocol) {
       throw new InsecureRegistryException(url);
     }
 
+<<<<<<< Updated upstream
     try (Connection connection = connectionFactory.apply(url)) {
+=======
+    try (Connection connection =
+        connectionFactory.apply(requestState.url)) {
+>>>>>>> Stashed changes
       Request.Builder requestBuilder =
           Request.builder()
               .setUserAgent(userAgent)
@@ -214,14 +240,24 @@ class RegistryEndpointCaller<T> {
         }
       }
     } catch (SSLPeerUnverifiedException ex) {
-      
+      if (requestState.verifyCertificate) {
+      }
+      return null;
+
     } catch (HttpHostConnectException ex) {
       // Tries to call with HTTP protocol if HTTPS failed to connect.
       // Note that this will not succeed if 'allowInsecureRegistries' is false.
+<<<<<<< Updated upstream
       if ("https".equals(url.getProtocol())) {
         GenericUrl httpUrl = new GenericUrl(url);
         httpUrl.setScheme("http");
         return call(httpUrl.toURL());
+=======
+      if ("https".equals(requestState.url.getProtocol())) {
+        if (allowInsecureRegistries) {
+          
+        }
+>>>>>>> Stashed changes
       }
 
       throw ex;
