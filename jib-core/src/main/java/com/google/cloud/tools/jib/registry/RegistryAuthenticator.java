@@ -77,10 +77,11 @@ public class RegistryAuthenticator {
     public RegistryAuthenticator initialize()
         throws RegistryAuthenticationFailedException, IOException, RegistryException {
       try {
-        RegistryAuthenticator authenticator = RegistryClient.factory(serverUrl, repository)
-            .setAllowInsecureRegistries(allowInsecureRegistries)
-            .newRegistryClient()
-            .getRegistryAuthenticator();
+        RegistryAuthenticator authenticator =
+            RegistryClient.factory(serverUrl, repository)
+                .setAllowInsecureRegistries(allowInsecureRegistries)
+                .newRegistryClient()
+                .getRegistryAuthenticator();
         authenticator.setAllowInsecureRegistries(false);
         return authenticator;
 
@@ -88,11 +89,7 @@ public class RegistryAuthenticator {
         throw new RegistryAuthenticationFailedException(ex);
 
       } catch (InsecureRegistryException ex) {
-<<<<<<< Updated upstream
         // Cannot skip certificate validation or use HTTP, so just return null.
-=======
-        // HTTP or skipping certificate validation is not allowed, so just return null.
->>>>>>> Stashed changes
         return null;
       }
     }

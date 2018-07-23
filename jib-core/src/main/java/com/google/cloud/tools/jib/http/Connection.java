@@ -52,9 +52,9 @@ public class Connection implements Closeable {
     private final URL url;
 
     /**
-     * Do not use {@link NetHttpTransport}. It does not process response errors properly. A new {@link
-     * ApacheHttpTransport} needs to be created for each connection because otherwise HTTP connection
-     * persistence causes the connection to throw {@link NoHttpResponseException}.
+     * Do not use {@link NetHttpTransport}. It does not process response errors properly. A new
+     * {@link ApacheHttpTransport} needs to be created for each connection because otherwise HTTP
+     * connection persistence causes the connection to throw {@link NoHttpResponseException}.
      *
      * @see <a
      *     href="https://github.com/google/google-http-java-client/issues/39">https://github.com/google/google-http-java-client/issues/39</a>

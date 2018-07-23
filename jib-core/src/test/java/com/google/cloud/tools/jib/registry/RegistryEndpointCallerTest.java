@@ -174,7 +174,8 @@ public class RegistryEndpointCallerTest {
             true,
             mockConnectionFactory);
     try {
-      testRegistryEndpointCallerInsecure.call(new URL("http://location"));
+      testRegistryEndpointCallerInsecure.callWithInsecureRegistryFailover(
+          new URL("http://location"));
       Assert.fail("Call should have failed");
 
     } catch (RegistryCredentialsNotSentException ex) {
