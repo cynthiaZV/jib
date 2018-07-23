@@ -30,7 +30,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import org.apache.http.NoHttpResponseException;
@@ -57,20 +57,22 @@ class RegistryEndpointCaller<T> {
 
     @Nullable private final Authorization authorization;
     private final URL url;
+    private final boolean verifyCertificate;
 
     /**
      * @param authorization authentication credentials
      * @param url the endpoint URL to call
      */
     @VisibleForTesting
-    RequestState(@Nullable Authorization authorization, URL url) {
+    RequestState(@Nullable Authorization authorization, URL url, boolean verifyCertificate) {
       this.authorization = authorization;
       this.url = url;
+      this.verifyCertificate = verifyCertificate;
     }
   }
 
   /** Makes a {@link Connection} to the specified {@link URL}. */
-  private final Function<URL, Connection> connectionFactory;
+  private final BiFunction<URL, Boolean, Connection> connectionFactory;
 
   private final RequestState initialRequestState;
   private final String userAgent;
@@ -115,12 +117,13 @@ class RegistryEndpointCaller<T> {
       @Nullable Authorization authorization,
       RegistryEndpointRequestProperties registryEndpointRequestProperties,
       boolean allowInsecureRegistries,
-      Function<URL, Connection> connectionFactory)
+      BiFunction<URL, Boolean, Connection> connectionFactory)
       throws MalformedURLException {
     this.initialRequestState =
         new RequestState(
             authorization,
-            registryEndpointProvider.getApiRoute(DEFAULT_PROTOCOL + "://" + apiRouteBase));
+            registryEndpointProvider.getApiRoute(DEFAULT_PROTOCOL + "://" + apiRouteBase),
+            true);
     this.userAgent = userAgent;
     this.registryEndpointProvider = registryEndpointProvider;
     this.registryEndpointRequestProperties = registryEndpointRequestProperties;
@@ -157,7 +160,8 @@ class RegistryEndpointCaller<T> {
       throw new InsecureRegistryException(requestState.url);
     }
 
-    try (Connection connection = connectionFactory.apply(requestState.url)) {
+    try (Connection connection =
+        connectionFactory.apply(requestState.url, requestState.verifyCertificate)) {
       Request.Builder requestBuilder =
           Request.builder()
               .setUserAgent(userAgent)
@@ -226,21 +230,26 @@ class RegistryEndpointCaller<T> {
           // 'Location' header can be relative or absolute.
           URL redirectLocation =
               new URL(requestState.url, httpResponseException.getHeaders().getLocation());
-          return call(new RequestState(requestState.authorization, redirectLocation));
+          return call(
+              new RequestState(
+                  requestState.authorization,
+                  redirectLocation,
+                  requestState.verifyCertificate));
 
         } else {
           // Unknown
           throw httpResponseException;
         }
       }
-
-    } catch (HttpHostConnectException | SSLPeerUnverifiedException ex) {
+    } catch (SSLPeerUnverifiedException ex) {
+      
+    } catch (HttpHostConnectException ex) {
       // Tries to call with HTTP protocol if HTTPS failed to connect.
       // Note that this will not succeed if 'allowInsecureRegistries' is false.
       if ("https".equals(requestState.url.getProtocol())) {
         GenericUrl httpUrl = new GenericUrl(requestState.url);
         httpUrl.setScheme("http");
-        return call(new RequestState(requestState.authorization, httpUrl.toURL()));
+        return call(new RequestState(requestState.authorization, httpUrl.toURL(), false));
       }
 
       throw ex;

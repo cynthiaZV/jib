@@ -65,7 +65,7 @@ public class Connection implements Closeable {
    *
    * @param url the url to send the request to
    */
-  public Connection(URL url) {
+  public Connection(URL url, boolean verifyCertificate) {
     this.url = new GenericUrl(url);
   }
 
