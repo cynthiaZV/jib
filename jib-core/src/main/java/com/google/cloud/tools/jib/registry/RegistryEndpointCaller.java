@@ -30,7 +30,7 @@ import com.google.common.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.function.Function;
+import java.security.GeneralSecurityException;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import org.apache.http.NoHttpResponseException;
@@ -42,6 +42,11 @@ import org.apache.http.conn.HttpHostConnectException;
  * @param <T> the type returned by calling the endpoint
  */
 class RegistryEndpointCaller<T> {
+
+  @FunctionalInterface @VisibleForTesting
+  static interface ConnectionFactory {
+    Connection create(URL url) throws GeneralSecurityException;
+  }
 
   /**
    * @see <a
@@ -57,6 +62,9 @@ class RegistryEndpointCaller<T> {
   @Nullable private final Authorization authorization;
   private final RegistryEndpointRequestProperties registryEndpointRequestProperties;
   private final boolean allowInsecureRegistries;
+
+  private final ConnectionFactory connectionFactory;
+  private final ConnectionFactory nonVerifyingConnectionFactory;
 
   /**
    * Constructs with parameters for making the request.
@@ -77,6 +85,28 @@ class RegistryEndpointCaller<T> {
       RegistryEndpointRequestProperties registryEndpointRequestProperties,
       boolean allowInsecureRegistries)
       throws MalformedURLException {
+    this(
+        userAgent,
+        apiRouteBase,
+        registryEndpointProvider,
+        authorization,
+        registryEndpointRequestProperties,
+        allowInsecureRegistries,
+        Connection::new,
+        url -> new Connection.Builder(url).doNotValidateCertificate().build());
+  }
+
+  @VisibleForTesting
+  RegistryEndpointCaller(
+      String userAgent,
+      String apiRouteBase,
+      RegistryEndpointProvider<T> registryEndpointProvider,
+      @Nullable Authorization authorization,
+      RegistryEndpointRequestProperties registryEndpointRequestProperties,
+      boolean allowInsecureRegistries,
+      ConnectionFactory connectionFactory,
+      ConnectionFactory nonVerifyingConnectionFactory)
+      throws MalformedURLException {
     this.initialRequestUrl =
         registryEndpointProvider.getApiRoute(DEFAULT_PROTOCOL + "://" + apiRouteBase);
     this.userAgent = userAgent;
@@ -84,6 +114,8 @@ class RegistryEndpointCaller<T> {
     this.authorization = authorization;
     this.registryEndpointRequestProperties = registryEndpointRequestProperties;
     this.allowInsecureRegistries = allowInsecureRegistries;
+    this.connectionFactory = connectionFactory;
+    this.nonVerifyingConnectionFactory = nonVerifyingConnectionFactory;
   }
 
   /**
@@ -101,21 +133,32 @@ class RegistryEndpointCaller<T> {
   @VisibleForTesting
   @Nullable
   T callWithInsecureRegistryHandling(URL url) throws IOException, RegistryException {
-    Function<URL, Connection> connectionFactory = givenUrl -> new Connection(givenUrl);
     try {
       return call(url, connectionFactory);
-    } catch (SSLPeerUnverifiedException unverifiedException) {
+    } catch (GeneralSecurityException ex) {
+      // Can be thrown only from nonVerifyingConnectionFactory
+      throw new RuntimeException(
+          "BUG: file an issue at https://github.com/GoogleContainerTools/jib/issues/new");
+
+    } catch (SSLPeerUnverifiedException ex) {
+      // If allowInsecureRegistries is set, try again while ignoring certificate.
       if (!allowInsecureRegistries) {
         throw new InsecureRegistryException(url);
       }
-
       try {
-        return call(url, connectionFactory);
-      } catch (HttpHostConnectException connectException) {
-        // Tries to call with HTTP protocol if all else fail.
+        return call(url, nonVerifyingConnectionFactory);
+
+      } catch (GeneralSecurityException | HttpHostConnectException exception) {
+        // Try HTTP as a last resort.
         GenericUrl httpUrl = new GenericUrl(url);
         httpUrl.setScheme("http");
-        return call(httpUrl.toURL(), connectionFactory);
+        try {
+          return call(httpUrl.toURL(), connectionFactory);
+        } catch (GeneralSecurityException securityException) {
+          // Can be thrown only from nonVerifyingConnectionFactory
+          throw new RuntimeException(
+              "BUG: file an issue at https://github.com/GoogleContainerTools/jib/issues/new");
+        }
       }
     }
   }
@@ -127,12 +170,13 @@ class RegistryEndpointCaller<T> {
    * @return an object representing the response, or {@code null}
    * @throws IOException for most I/O exceptions when making the request
    * @throws RegistryException for known exceptions when interacting with the registry
+   * @throws GeneralSecurityException
    */
   @Nullable
-  private T call(URL url, Function<URL, Connection> connectionFactory)
-      throws IOException, RegistryException {
+  private T call(URL url, ConnectionFactory connectionFactory)
+      throws IOException, RegistryException, GeneralSecurityException {
     boolean isHttpProtocol = "http".equals(url.getProtocol());
-    try (Connection connection = connectionFactory.apply(url)) {
+    try (Connection connection = connectionFactory.create(url)) {
       Request.Builder requestBuilder =
           Request.builder()
               .setUserAgent(userAgent)

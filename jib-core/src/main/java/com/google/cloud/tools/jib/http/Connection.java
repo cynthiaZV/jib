@@ -70,10 +70,11 @@ public class Connection implements Closeable {
      *
      * @throws GeneralSecurityException if unable to turn off
      */
-    public void doNotValidateCertificate() throws GeneralSecurityException {
+    public Builder doNotValidateCertificate() throws GeneralSecurityException {
       ApacheHttpTransport.Builder transportBuilder = new ApacheHttpTransport.Builder();
       transportBuilder.doNotValidateCertificate();
       httpTransport = transportBuilder.build();
+      return this;
     }
 
     public Connection build() {
