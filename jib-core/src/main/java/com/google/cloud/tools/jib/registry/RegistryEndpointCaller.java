@@ -95,12 +95,12 @@ class RegistryEndpointCaller<T> {
    */
   @Nullable
   T call() throws IOException, RegistryException {
-    return callWithInsecureRegistryFailover(initialRequestUrl);
+    return callWithInsecureRegistryHandling(initialRequestUrl);
   }
 
   @VisibleForTesting
   @Nullable
-  T callWithInsecureRegistryFailover(URL url) throws IOException, RegistryException {
+  T callWithInsecureRegistryHandling(URL url) throws IOException, RegistryException {
     Function<URL, Connection> connectionFactory = givenUrl -> new Connection(givenUrl);
     try {
       return call(url, connectionFactory);
