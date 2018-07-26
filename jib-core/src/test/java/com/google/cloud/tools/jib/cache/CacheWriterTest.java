@@ -130,8 +130,9 @@ public class CacheWriterTest {
                     ImmutableList.of(Paths.get("some", "source", "file")),
                     "/some/extraction/path")));
 
-    cacheWriter.writeLayer(mockReproducibleLayerBuilder);
-    cacheWriter.writeLayer(mockReproducibleLayerBuilder);
+    CachedLayerWithMetadata cachedLayer1 = cacheWriter.writeLayer(mockReproducibleLayerBuilder);
+    CachedLayerWithMetadata cachedLayer2 = cacheWriter.writeLayer(mockReproducibleLayerBuilder);
+    Assert.assertEquals(cachedLayer1.getDiffId(), cachedLayer2.getDiffId());
   }
 
   @Test
@@ -158,7 +159,7 @@ public class CacheWriterTest {
    *     file
    */
   private ExpectedLayer getExpectedLayer() throws IOException {
-    String expectedBlobAsString =
+    String expectedBlobAString =
         new String(Files.readAllBytes(resourceBlob), StandardCharsets.UTF_8);
 
     // Gets the expected content descriptor, diff ID, and compressed BLOB.
@@ -168,7 +169,7 @@ public class CacheWriterTest {
     CountingDigestOutputStream uncompressedDigestOutputStream;
     try (GZIPOutputStream compressorStream = new GZIPOutputStream(compressedDigestOutputStream)) {
       uncompressedDigestOutputStream = new CountingDigestOutputStream(compressorStream);
-      uncompressedDigestOutputStream.write(expectedBlobAsString.getBytes(StandardCharsets.UTF_8));
+      uncompressedDigestOutputStream.write(expectedBlobAString.getBytes(StandardCharsets.UTF_8));
     }
 
     BlobDescriptor expectedBlobADescriptor = compressedDigestOutputStream.toBlobDescriptor();
