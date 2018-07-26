@@ -29,7 +29,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.zip.GZIPInputStream;
@@ -80,7 +79,7 @@ public class CacheWriter {
       // skip renaming and use the existing file. This happens if a new layer happens to have the
       // same content as a previously-cached layer.
       Path layerFile = getLayerFile(compressedBlobDescriptor.getDigest());
-      Files.move(tempLayerFile, layerFile, StandardCopyOption.REPLACE_EXISTING);
+      Files.move(tempLayerFile, layerFile);
 
       CachedLayer cachedLayer = new CachedLayer(layerFile, compressedBlobDescriptor, diffId);
       LayerMetadata layerMetadata =
