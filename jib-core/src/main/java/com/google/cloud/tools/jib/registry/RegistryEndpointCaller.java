@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.security.GeneralSecurityException;
+import java.util.function.Function;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import org.apache.http.NoHttpResponseException;
@@ -63,8 +64,11 @@ class RegistryEndpointCaller<T> {
   private final RegistryEndpointRequestProperties registryEndpointRequestProperties;
   private final boolean allowInsecureRegistries;
 
-  private final ConnectionFactory connectionFactory;
-  private final ConnectionFactory nonVerifyingConnectionFactory;
+  /** Makes a {@link Connection} to the specified {@link URL}. */
+  private final Function<URL, Connection> connectionFactory;
+
+  /** Makes an insecure {@link Connection} to the specified {@link URL}. */
+  @Nullable private Function<URL, Connection> insecureConnectionFactory;
 
   /**
    * Constructs with parameters for making the request.
@@ -92,8 +96,8 @@ class RegistryEndpointCaller<T> {
         authorization,
         registryEndpointRequestProperties,
         allowInsecureRegistries,
-        Connection::new,
-        url -> new Connection.Builder(url).doNotValidateCertificate().build());
+        Connection.getConnectionFactory(),
+        null /* might never be used, so create lazily to delay throwing potential GeneralSecurityException */);
   }
 
   @VisibleForTesting
@@ -104,8 +108,8 @@ class RegistryEndpointCaller<T> {
       @Nullable Authorization authorization,
       RegistryEndpointRequestProperties registryEndpointRequestProperties,
       boolean allowInsecureRegistries,
-      ConnectionFactory connectionFactory,
-      ConnectionFactory nonVerifyingConnectionFactory)
+      Function<URL, Connection> connectionFactory,
+      @Nullable Function<URL, Connection> insecureConnectionFactory)
       throws MalformedURLException {
     this.initialRequestUrl =
         registryEndpointProvider.getApiRoute(DEFAULT_PROTOCOL + "://" + apiRouteBase);
@@ -115,7 +119,7 @@ class RegistryEndpointCaller<T> {
     this.registryEndpointRequestProperties = registryEndpointRequestProperties;
     this.allowInsecureRegistries = allowInsecureRegistries;
     this.connectionFactory = connectionFactory;
-    this.nonVerifyingConnectionFactory = nonVerifyingConnectionFactory;
+    this.insecureConnectionFactory = insecureConnectionFactory;
   }
 
   /**
@@ -135,30 +139,21 @@ class RegistryEndpointCaller<T> {
   T callWithInsecureRegistryHandling(URL url) throws IOException, RegistryException {
     try {
       return call(url, connectionFactory);
-    } catch (GeneralSecurityException ex) {
-      // Can be thrown only from nonVerifyingConnectionFactory
-      throw new RuntimeException(
-          "BUG: file an issue at https://github.com/GoogleContainerTools/jib/issues/new");
 
     } catch (SSLPeerUnverifiedException ex) {
-      // If allowInsecureRegistries is set, try again while ignoring certificate.
+
       if (!allowInsecureRegistries) {
         throw new InsecureRegistryException(url);
       }
+
       try {
-        return call(url, nonVerifyingConnectionFactory);
+        return call(url, Connection.getInsecureConnectionFactory());
 
       } catch (GeneralSecurityException | HttpHostConnectException exception) {
         // Try HTTP as a last resort.
         GenericUrl httpUrl = new GenericUrl(url);
         httpUrl.setScheme("http");
-        try {
-          return call(httpUrl.toURL(), connectionFactory);
-        } catch (GeneralSecurityException securityException) {
-          // Can be thrown only from nonVerifyingConnectionFactory
-          throw new RuntimeException(
-              "BUG: file an issue at https://github.com/GoogleContainerTools/jib/issues/new");
-        }
+        return call(httpUrl.toURL(), connectionFactory);
       }
     }
   }
@@ -172,19 +167,26 @@ class RegistryEndpointCaller<T> {
    * @throws RegistryException for known exceptions when interacting with the registry
    * @throws GeneralSecurityException
    */
+  @VisibleForTesting
   @Nullable
-  private T call(URL url, ConnectionFactory connectionFactory)
-      throws IOException, RegistryException, GeneralSecurityException {
+  T call(URL url, Function<URL, Connection> connectionFactory)
+      throws IOException, RegistryException {
     boolean isHttpProtocol = "http".equals(url.getProtocol());
-    try (Connection connection = connectionFactory.create(url)) {
+    // Only sends authorization if using HTTPS or explicitly forcing over HTTP.
+    boolean sendCredentials = !isHttpProtocol || Boolean.getBoolean("sendCredentialsOverHttp");
+    try (Connection connection = connectionFactory.apply(url)) {
+/*
+    if (!allowInsecureRegistries && isHttpProtocol) {
+      throw new InsecureRegistryException(url);
+    }
+*/
       Request.Builder requestBuilder =
           Request.builder()
               .setUserAgent(userAgent)
               .setHttpTimeout(Integer.getInteger("jib.httpTimeout"))
               .setAccept(registryEndpointProvider.getAccept())
               .setBody(registryEndpointProvider.getContent());
-      // Only sends authorization if using HTTPS.
-      if (!isHttpProtocol || Boolean.getBoolean("sendCredentialsOverHttp")) {
+      if (sendCredentials) {
         requestBuilder.setAuthorization(authorization);
       }
       Response response =
@@ -223,18 +225,16 @@ class RegistryEndpointCaller<T> {
 
         } else if (httpResponseException.getStatusCode()
             == HttpStatusCodes.STATUS_CODE_UNAUTHORIZED) {
-          if (isHttpProtocol) {
-            // Using HTTP, so credentials weren't sent.
-            throw new RegistryCredentialsNotSentException(
-                registryEndpointRequestProperties.getServerUrl(),
-                registryEndpointRequestProperties.getImageName());
-
-          } else {
-            // Using HTTPS, so credentials are missing.
+          if (sendCredentials) {
+            // Credentials are either missing or wrong.
             throw new RegistryUnauthorizedException(
                 registryEndpointRequestProperties.getServerUrl(),
                 registryEndpointRequestProperties.getImageName(),
                 httpResponseException);
+          } else {
+            throw new RegistryCredentialsNotSentException(
+                registryEndpointRequestProperties.getServerUrl(),
+                registryEndpointRequestProperties.getImageName());
           }
 
         } else if (httpResponseException.getStatusCode()

@@ -40,6 +40,12 @@ import org.mockito.junit.MockitoJUnitRunner;
 @RunWith(MockitoJUnitRunner.class)
 public class ConnectionTest {
 
+  @FunctionalInterface
+  private static interface SendFunction {
+
+    Response send(Connection connection, Request request) throws IOException;
+  }
+
   @Mock private HttpRequestFactory mockHttpRequestFactory;
   @Mock private HttpRequest mockHttpRequest;
 
@@ -53,7 +59,8 @@ public class ConnectionTest {
   private HttpResponse mockHttpResponse;
 
   @InjectMocks
-  private final Connection testConnection = new Connection.Builder(fakeUrl.toURL()).build();
+  private final Connection testConnection =
+      Connection.getConnectionFactory().apply(fakeUrl.toURL());
 
   @Test
   public void testGet() throws IOException {
@@ -93,12 +100,6 @@ public class ConnectionTest {
 
     Mockito.verify(mockHttpRequest).setConnectTimeout(5982);
     Mockito.verify(mockHttpRequest).setReadTimeout(5982);
-  }
-
-  @FunctionalInterface
-  private interface SendFunction {
-
-    Response send(Connection connection, Request request) throws IOException;
   }
 
   private void setUpMocksAndFakes(Integer httpTimeout) throws IOException {
