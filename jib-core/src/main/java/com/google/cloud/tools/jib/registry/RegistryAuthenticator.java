@@ -77,13 +77,10 @@ public class RegistryAuthenticator {
     public RegistryAuthenticator initialize()
         throws RegistryAuthenticationFailedException, IOException, RegistryException {
       try {
-        RegistryAuthenticator authenticator =
-            RegistryClient.factory(serverUrl, repository)
-                .setAllowInsecureRegistries(allowInsecureRegistries)
-                .newRegistryClient()
-                .getRegistryAuthenticator();
-        authenticator.setAllowInsecureRegistries(false);
-        return authenticator;
+        return RegistryClient.factory(serverUrl, repository)
+            .setAllowInsecureRegistries(allowInsecureRegistries)
+            .newRegistryClient()
+            .getRegistryAuthenticator();
 
       } catch (MalformedURLException ex) {
         throw new RegistryAuthenticationFailedException(ex);
@@ -187,7 +184,6 @@ public class RegistryAuthenticator {
 
   private final String authenticationUrlBase;
   @Nullable private Authorization authorization;
-  private boolean allowInsecureRegistries;
 
   RegistryAuthenticator(String realm, String service, String repository) {
     authenticationUrlBase = realm + "?service=" + service + "&scope=repository:" + repository + ":";
@@ -201,11 +197,6 @@ public class RegistryAuthenticator {
    */
   public RegistryAuthenticator setAuthorization(@Nullable Authorization authorization) {
     this.authorization = authorization;
-    return this;
-  }
-
-  public RegistryAuthenticator setAllowInsecureRegistries(boolean allowInsecureRegistries) {
-    this.allowInsecureRegistries = allowInsecureRegistries;
     return this;
   }
 

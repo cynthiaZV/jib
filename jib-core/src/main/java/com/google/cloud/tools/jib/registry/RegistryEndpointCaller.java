@@ -44,11 +44,6 @@ import org.apache.http.conn.HttpHostConnectException;
  */
 class RegistryEndpointCaller<T> {
 
-  @FunctionalInterface @VisibleForTesting
-  static interface ConnectionFactory {
-    Connection create(URL url) throws GeneralSecurityException;
-  }
-
   /**
    * @see <a
    *     href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/308">https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/308</a>
@@ -165,7 +160,6 @@ class RegistryEndpointCaller<T> {
    * @return an object representing the response, or {@code null}
    * @throws IOException for most I/O exceptions when making the request
    * @throws RegistryException for known exceptions when interacting with the registry
-   * @throws GeneralSecurityException
    */
   @VisibleForTesting
   @Nullable
@@ -174,12 +168,8 @@ class RegistryEndpointCaller<T> {
     boolean isHttpProtocol = "http".equals(url.getProtocol());
     // Only sends authorization if using HTTPS or explicitly forcing over HTTP.
     boolean sendCredentials = !isHttpProtocol || Boolean.getBoolean("sendCredentialsOverHttp");
+
     try (Connection connection = connectionFactory.apply(url)) {
-/*
-    if (!allowInsecureRegistries && isHttpProtocol) {
-      throw new InsecureRegistryException(url);
-    }
-*/
       Request.Builder requestBuilder =
           Request.builder()
               .setUserAgent(userAgent)
